@@ -26,7 +26,7 @@ $ npm install asteriskagi
 ```javascript
 import AGIServer from "asteriskagi";
 
-const agi = new AGIServer(/* {port: 1234} */); // Server (optional port)
+const agi = new AGIServer(/* {port: 4573} */); // Server (optional port, default: 4573)
 
 agi.on("call", async (call) => {
   const {
@@ -53,6 +53,12 @@ agi.on("call", async (call) => {
   await call.SayAlpha("hello");
   await call.Hangup();
 });
+```
+
+In Asterisk dialplan (assuming the Node server is running on the same machine):
+
+```
+exten => 1234,1,AGI(agi://localhost:4573)
 ```
 
 ## Commands
