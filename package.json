@@ -1,0 +1,25 @@
+{
+  "name": "asteriskagi",
+  "version": "1.0.0",
+  "description": "NodeJS Fast AGI Server",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clearlyip/node-asteriskagi.git"
+  },
+  "keywords": [
+    "Asterisk",
+    "AGI",
+    "Node"
+  ],
+  "author": "Corey S. McFadden",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/clearlyip/node-asteriskagi/issues"
+  },
+  "homepage": "https://github.com/clearlyip/node-asteriskagi#readme"
+}
