@@ -9,7 +9,7 @@ Event-based server useful for building [Asterisk](https://www.asterisk.org) Fast
 # Features
 
 - Event-driven
-- Compatible with Asterisk AGI://
+- Compatible with Asterisk AGI(agi://)
 
 # Getting Started
 
@@ -29,16 +29,7 @@ import AGIServer from "asteriskagi";
 const agi = new AGIServer(/* {port: 4573} */); // Server (optional port, default: 4573)
 
 agi.on("call", async (call) => {
-  const {
-    remoteServer,
-    uniqueid,
-    context,
-    extension,
-    priority,
-    calleridname,
-    callerid,
-    channel,
-  } = call;
+  const { remoteServer, uniqueid, context, extension, priority, calleridname, callerid, channel } = call;
 
   call.on("hangup", () => {
     console.log(`Hangup  ${remoteServer}/${channel}`);
