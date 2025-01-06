@@ -1,6 +1,6 @@
 {
   "name": "asteriskagi",
-  "version": "1.2.1",
+  "version": "1.2.0",
   "description": "NodeJS Fast AGI Server",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
