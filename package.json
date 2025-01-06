@@ -1,6 +1,6 @@
 {
   "name": "asteriskagi",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "NodeJS Fast AGI Server",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/clearlyip/node-asteriskagi#readme",
   "devDependencies": {
-    "@types/node": "^22.6.0",
+    "@types/node": "^20.11.0",
     "typescript": "^5.6.2"
   }
 }

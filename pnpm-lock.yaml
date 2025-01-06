@@ -8,8 +8,8 @@ importers:
   .:
     devDependencies:
       "@types/node":
-        specifier: ^22.6.0
-        version: 22.6.0
+        specifier: ^20.11.0
+        version: 20.11.0
       typescript:
         specifier: ^5.6.2
         version: 5.6.2
@@ -36,7 +36,7 @@ packages:
       }
 
 snapshots:
-  "@types/node@22.6.0":
+  "@types/node@20.11.0":
     dependencies:
       undici-types: 6.19.8
 
