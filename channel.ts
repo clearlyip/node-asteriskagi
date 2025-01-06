@@ -340,25 +340,16 @@ export class AGIChannel extends events.EventEmitter {
           }
           if (response.result < 0) {
             this.emit("error", "Dead channel detected.");
-            resolve(false);
-            // reject("Dead channel detected.");
             this._socket && this._socket.end();
+            resolve(false);
           }
-          const final = response.data.match(/\((.*?)\)/);
-          let dataResponse: any = null;
-          if (final) {
-            dataResponse = final[1];
-          } else if (response.data) {
-            dataResponse = response.data;
-          } else {
-            dataResponse = response.result;
-          }
-          resolve(dataResponse);
+          const match = response.data.match(/\((.*?)\)/);
+          resolve(match ? match[1] : response.data || response.result);
         });
         if (this._socket.writable) {
           this._socket.write(command + "\n", "utf8");
         } else {
-          // reject("Dead channel detected.");
+          this.emit("error", "Dead channel detected.");
           this._socket && this._socket.end();
           resolve(false);
         }
