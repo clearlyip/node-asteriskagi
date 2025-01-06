@@ -345,7 +345,15 @@ export class AGIChannel extends events.EventEmitter {
             this._socket && this._socket.end();
           }
           const final = response.data.match(/\((.*?)\)/);
-          resolve(final ? final[1] : response.data);
+          let dataResponse: any = null;
+          if (final) {
+            dataResponse = final[1];
+          } else if (response.data) {
+            dataResponse = response.data;
+          } else {
+            dataResponse = response.result;
+          }
+          resolve(dataResponse);
         });
         if (this._socket.writable) {
           this._socket.write(command + "\n", "utf8");
