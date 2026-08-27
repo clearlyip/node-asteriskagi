@@ -30,6 +30,7 @@ const agi = new AGIServer(/* {port: 4573} */); // Server (optional port, default
 
 agi.on("call", async (call) => {
   const { remoteServer, uniqueid, context, extension, priority, calleridname, callerid, channel } = call;
+  const isHangup = (err) => err?.code === "AGI_HANGUP";
 
   call.on("hangup", () => {
     console.log(`Hangup  ${remoteServer}/${channel}`);
@@ -39,10 +40,25 @@ agi.on("call", async (call) => {
     console.error(`ERROR: ${remoteServer}/${channel}: ${err}`);
   });
 
-  await call.Answer();
-  await call.Playback("beep");
-  await call.SayAlpha("hello");
-  await call.Hangup();
+  try {
+    await call.Answer();
+    await call.Playback("beep");
+    await call.SayAlpha("hello");
+  } catch (err) {
+    if (!isHangup(err)) {
+      console.error(`ERROR: ${callLabel}:`, err);
+    }
+  } finally {
+    if (!call.hungup) {
+      try {
+        await call.Hangup();
+      } catch (err) {
+        if (!isHangup(err)) {
+          console.error(`HANGUP ERROR: ${callLabel}:`, err);
+        }
+      }
+    }
+  }
 });
 ```
 

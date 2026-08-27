@@ -8,8 +8,28 @@
 import * as net from "net";
 import events from "events";
 
+export class AGIHangupError extends Error {
+  readonly code = "AGI_HANGUP";
+  readonly cause?: unknown;
+
+  constructor(message = "AGI channel hung up", cause?: unknown) {
+    super(message);
+    this.name = "AGIHangupError";
+    this.cause = cause;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+type PendingCommand = {
+  resolve: (value: any) => void;
+  reject: (reason: AGIHangupError) => void;
+};
+
 export class AGIChannel extends events.EventEmitter {
   private _socket!: net.Socket;
+  private _buffer = "";
+  private _ended = false;
+  private _pending?: PendingCommand;
   public remoteServer: string | false;
   public channel?: string = "";
   public language?: string = "en";
@@ -75,6 +95,83 @@ export class AGIChannel extends events.EventEmitter {
     this.accountcode = props?.accountcode || "";
     this.threadid = props?.threadid || "";
     this.currently = false; // Current operation
+
+    this._socket.on("data", this._handleData);
+    this._socket.once("end", () => this.end());
+    this._socket.once("close", () => this.end());
+    this._socket.once("error", (err) => this.end(err));
+  }
+
+  get hungup() {
+    return this._ended;
+  }
+
+  /**
+   * End the channel and reject any command awaiting an AGI response.
+   */
+  end(cause?: Error) {
+    if (this._ended) return;
+
+    const error = cause instanceof AGIHangupError ? cause : new AGIHangupError(cause ? `AGI channel closed: ${cause.message}` : undefined, cause);
+
+    this._ended = true;
+    this.currently = false;
+    this._socket.off("data", this._handleData);
+
+    const pending = this._pending;
+    this._pending = undefined;
+    pending?.reject(error);
+
+    if (!this._socket.destroyed) this._socket.end();
+    this.emit("hangup", error);
+  }
+
+  private _handleData = (data: Buffer) => {
+    if (this._ended) return;
+
+    this._buffer += data.toString();
+    const lines: string[] = [];
+    let newline: number;
+
+    while ((newline = this._buffer.indexOf("\n")) >= 0) {
+      const line = this._buffer.slice(0, newline).replace(/\r$/, "").trim();
+      this._buffer = this._buffer.slice(newline + 1);
+      if (line) lines.push(line);
+    }
+
+    if (lines.includes("HANGUP")) {
+      this.end();
+      return;
+    }
+
+    for (const line of lines) this._handleResponse(line);
+  };
+
+  private _handleResponse(line: string) {
+    const pending = this._pending;
+    if (!pending) return;
+
+    const response: any = this._parseResponse(line);
+    if (response.code === "520") {
+      this._pending = undefined;
+      this._emitError(response.data);
+      pending.resolve(false);
+      return;
+    }
+
+    if (response.result < 0) {
+      this._emitError("Dead channel detected.");
+      this.end(new AGIHangupError());
+      return;
+    }
+
+    this._pending = undefined;
+    const match = response.data.match(/\((.*?)\)/);
+    pending.resolve(match ? match[1] : response.data || response.result);
+  }
+
+  private _emitError(error: unknown) {
+    if (this.listenerCount("error")) this.emit("error", error);
   }
 
   // Commands mapped to Exec
@@ -275,6 +372,8 @@ export class AGIChannel extends events.EventEmitter {
       this.currently = false;
       return;
     } catch (err) {
+      this.currently = false;
+      if (err instanceof AGIHangupError) throw err;
       return false;
     }
   }
@@ -288,6 +387,7 @@ export class AGIChannel extends events.EventEmitter {
     try {
       return await this.send("GET VARIABLE " + variable);
     } catch (err) {
+      if (err instanceof AGIHangupError) throw err;
       this.emit("error", "getVariable ERROR: " + err);
       return false;
     }
@@ -319,7 +419,9 @@ export class AGIChannel extends events.EventEmitter {
       this.currently = false;
       return;
     } catch (err) {
-      this.emit("error", "Playback ERROR: " + err);
+      this.currently = false;
+      if (err instanceof AGIHangupError) throw err;
+      this._emitError("Playback ERROR: " + err);
       return false;
     }
   }
@@ -329,34 +431,23 @@ export class AGIChannel extends events.EventEmitter {
    * @param {string} command
    */
   async send(command: string) {
+    if (this._ended) throw new AGIHangupError();
+    if (this._pending) throw new Error("An AGI command is already in progress");
+
     return new Promise((resolve, reject) => {
-      try {
-        this._socket.once("data", (data) => {
-          const response: any = this._parseResponse(data.toString().trim());
-          if (response.code == "520") {
-            this.emit("error", response.data);
-            resolve(false);
-            return;
-          }
-          if (response.result < 0) {
-            this.emit("error", "Dead channel detected.");
-            this._socket && this._socket.end();
-            resolve(false);
-          }
-          const match = response.data.match(/\((.*?)\)/);
-          resolve(match ? match[1] : response.data || response.result);
-        });
-        if (this._socket.writable) {
-          this._socket.write(command + "\n", "utf8");
-        } else {
-          this.emit("error", "Dead channel detected.");
-          this._socket && this._socket.end();
-          resolve(false);
-        }
-      } catch (err) {
-        this.emit("error", "AGI Send Error:" + err);
-        resolve(false);
+      this._pending = { resolve, reject };
+
+      if (!this._socket.writable || this._socket.destroyed) {
+        this.end();
         return;
+      }
+
+      try {
+        this._socket.write(command + "\n", "utf8", (err) => {
+          if (err) this.end(err);
+        });
+      } catch (err) {
+        this.end(err instanceof Error ? err : new Error(String(err)));
       }
     });
   }

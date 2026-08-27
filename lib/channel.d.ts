@@ -1,5 +1,3 @@
-/// <reference types="node" />
-/// <reference types="node" />
 /**
  *  Asterisk AGI (FastAGI) Server for Nodejs / Channel
  *  @module node-asteriskagi
@@ -9,8 +7,16 @@
  */
 import * as net from "net";
 import events from "events";
+export declare class AGIHangupError extends Error {
+    readonly code = "AGI_HANGUP";
+    readonly cause?: unknown;
+    constructor(message?: string, cause?: unknown);
+}
 export declare class AGIChannel extends events.EventEmitter {
     private _socket;
+    private _buffer;
+    private _ended;
+    private _pending?;
     remoteServer: string | false;
     channel?: string;
     language?: string;
@@ -53,6 +59,14 @@ export declare class AGIChannel extends events.EventEmitter {
         accountcode?: string;
         threadid?: string;
     });
+    get hungup(): boolean;
+    /**
+     * End the channel and reject any command awaiting an AGI response.
+     */
+    end(cause?: Error): void;
+    private _handleData;
+    private _handleResponse;
+    private _emitError;
     AddQueueMember: (args: string) => Promise<false | undefined>;
     AgentLogin: (args: string) => Promise<false | undefined>;
     AgentRequest: (args: string) => Promise<false | undefined>;
