@@ -13,13 +13,13 @@ import { AGIChannel } from "./channel";
 class AGIServer extends events.EventEmitter {
   public port: number = 4573;
   private fAGI!: net.Server;
-  constructor(props: { port?: number }) {
+  constructor(props: { port?: number } = {}) {
     super();
     try {
-      this.port = props?.port || this.port;
+      this.port = props.port ?? this.port;
       this._bind();
     } catch (err) {
-      console.log(`AGIServer error`, err);
+      console.error(`AGIServer error`, err);
     }
   }
 
@@ -29,54 +29,66 @@ class AGIServer extends events.EventEmitter {
   _bind() {
     try {
       this.fAGI = net.createServer((socket) => {
-        const remoteServer: string | false = socket?.remoteAddress
-          ? socket.remoteAddress.split(":").pop() || false
-          : false;
+        const remoteServer: string | false = socket.remoteAddress?.replace(/^::ffff:/, "") || false;
 
         let dataBuffer = "";
-        socket.on("data", async (data) => {
+
+        const onSocketError = (err: Error) => {
+          if (this.listenerCount("error")) this.emit("error", err);
+          else console.error("AGIServer socket error", err);
+        };
+
+        const onInitialData = (data: Buffer) => {
           dataBuffer += data.toString();
-          if (dataBuffer.includes("\n\n")) {
-            socket.removeAllListeners("data");
-            const agiVariables = dataBuffer
-              .split("\n")
-              .reduce<{ [key: string]: string }>((acc, line) => {
-                if (line.startsWith("agi_")) {
-                  const [key, value] = line
-                    .split(":")
-                    .map((item) => item.trim());
-                  acc[key.substring(4)] = value;
-                }
-                return acc;
-              }, {});
 
-            // Hangup detection
-            socket.on("data", async (data) => {
-              if (data.toString().includes("HANGUP")) {
-                socket.removeAllListeners("data");
-                socket.end();
-              }
-            });
+          const delimiter = dataBuffer.match(/\r?\n\r?\n/);
+          if (!delimiter || delimiter.index === undefined) return;
 
-            const call = new AGIChannel({
-              ...agiVariables,
-              remoteServer,
-              socket,
-            });
-            this.emit("call", call);
+          socket.pause();
+          socket.off("data", onInitialData);
+          socket.off("error", onSocketError);
 
-            socket.on("end", () => {
-              call.emit("hangup");
-            });
+          const header = dataBuffer.slice(0, delimiter.index);
+          const remainder = dataBuffer.slice(delimiter.index + delimiter[0].length);
+          const agiVariables: Record<string, string> = {};
+
+          for (const line of header.split(/\r?\n/)) {
+            if (!line.startsWith("agi_")) continue;
+
+            const separator = line.indexOf(":");
+            if (separator < 0) continue;
+
+            const key = line.slice(4, separator).trim();
+            agiVariables[key] = line.slice(separator + 1).trim();
           }
-        });
+
+          const call = new AGIChannel({
+            ...agiVariables,
+            remoteServer,
+            socket,
+          });
+
+          this.emit("call", call);
+
+          if (remainder) socket.unshift(Buffer.from(remainder));
+          socket.resume();
+        };
+
+        socket.once("error", onSocketError);
+        socket.on("data", onInitialData);
       });
+
+      this.fAGI.on("error", (err) => {
+        if (this.listenerCount("error")) this.emit("error", err);
+        else console.error("AGIServer error", err);
+      });
+
       this.fAGI.listen(this.port, () => {
         this.emit("ready", this.port);
       });
     } catch (err) {
-      console.log(`AGIServer`, err);
+      console.error("AGIServer error", err);
     }
   }
 }
-module.exports = AGIServer;
+export = AGIServer;

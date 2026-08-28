@@ -30,19 +30,32 @@ const agi = new AGIServer(/* {port: 4573} */); // Server (optional port, default
 
 agi.on("call", async (call) => {
   const { remoteServer, uniqueid, context, extension, priority, calleridname, callerid, channel } = call;
+  const isHangup = (err) => err?.code === "AGI_HANGUP";
 
-  call.on("hangup", () => {
+  call.once("hangup", () => {
     console.log(`Hangup  ${remoteServer}/${channel}`);
   });
 
-  call.on("error", (err) => {
-    console.error(`ERROR: ${remoteServer}/${channel}: ${err}`);
-  });
-
-  await call.Answer();
-  await call.Playback("beep");
-  await call.SayAlpha("hello");
-  await call.Hangup();
+  try {
+    await call.Answer();
+    await call.Playback("beep");
+    await call.SayAlpha("hello");
+  } catch (err) {
+    if (!isHangup(err)) {
+      console.error(`ERROR: ${callLabel}:`, err);
+    }
+  } finally {
+    if (!call.hungup) {
+      try {
+        await call.Hangup();
+      } catch (err) {
+        if (!isHangup(err)) {
+          console.error(`HANGUP ERROR: ${callLabel}:`, err);
+        }
+      }
+    }
+    /* CDR operations */
+  }
 });
 ```
 
@@ -55,6 +68,10 @@ exten => 1234,1,AGI(agi://localhost:4573)
 ## Commands
 
 All standard Asterisk dialplan commands (as of 20.x) are accessible via the call object. (See 'Basic Usage' for examples.)
+
+# Events
+> [!WARNING]
+> Make sure to handle clean up of in-call event listeners to prevent memory leaks.
 
 ## AGIServer Events
 
